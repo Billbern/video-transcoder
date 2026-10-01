@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Node (added in Sprint 3)
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Transcoder runtime artifacts
+/tmp/transcoder/
+*.log
+
+# Docker
+docker-compose.override.yml
+backend/transcoder.db

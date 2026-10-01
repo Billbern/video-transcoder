@@ -1,0 +1,91 @@
+# Production stack (used by CI/CD on the Hetzner VPS).
+# Pulls pre-built images from GHCR. Environment variables come from .env on the host.
+name: videotranscoder
+
+x-backend-base: &backend-base
+  image: ghcr.io/${REPO_OWNER}/video-transcoder-backend:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - transcoder-tmp:/tmp/transcoder
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    minio:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2024-10-29T16-01-48Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+
+  backend:
+    <<: *backend-base
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    expose:
+      - "8000"
+
+  worker:
+    <<: *backend-base
+    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+
+  # Frontend image is built/published by CI and served statically by Caddy.
+  # In Sprint 3 the Caddyfile will route "/" to the frontend container.
+  frontend:
+    image: ghcr.io/${REPO_OWNER}/video-transcoder-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    expose:
+      - "80"
+
+volumes:
+  postgres-data:
+  minio-data:
+  transcoder-tmp:
+  caddy-data:
+  caddy-config:

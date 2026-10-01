@@ -1,0 +1,18 @@
+# Caddy reverse-proxy: auto-TLS via Let's Encrypt.
+# Configure ${SITE_DOMAIN} in the .env file on the Hetzner VPS.
+{
+    email {$LETSENCRYPT_EMAIL}
+}
+
+{$SITE_DOMAIN} {
+    encode zstd gzip
+
+    # API
+    reverse_proxy backend:8000
+
+    # (Sprint 3) Serve the React frontend at /.
+    # route /api/* {
+    #     reverse_proxy backend:8000
+    # }
+    # reverse_proxy frontend:80
+}

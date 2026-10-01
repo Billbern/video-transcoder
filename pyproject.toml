@@ -1,0 +1,96 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "PT",  # flake8-pytest-style
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate (commented-out code)
+    "PL",  # pylint
+    "TRY", # tryceratops
+]
+ignore = [
+    "PLR0913",  # too many arguments (test fixtures often need this)
+    "TRY003",   # long messages outside exception class (verbose)
+    # FastAPI's `Depends(get_db)` in argument defaults is *the* idiomatic pattern;
+    # ruff's B008 is a false positive here.
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**/*.py" = [
+    "PLR2004",  # magic numbers in tests
+    "S101",     # `assert` is the point of pytest
+    "ARG001",   # unused args in fixtures
+    "ARG002",   # unused args in fixtures
+    "ARG005",   # lambdas may not use all args
+    "PT004",    # fixtures that don't return a value (autouse pattern)
+    "PT006",    # parametrize string vs tuple form
+    "PT018",    # plain asserts are fine in our tests
+    "N803",     # caps in test fixtures
+    "N806",     # caps in test fixtures
+    "SLF001",   # tests reach into private members
+    "E501",     # long lines in test fixtures are fine
+]
+"backend/app/api/*.py" = ["B008", "TRY301"]
+"backend/app/workers/*.py" = [
+    "PLW0603",  # module-level singletons (Celery engine + sync session)
+    "TRY300",   # try/except return pattern is fine in workers
+    "TRY301",   # abstract raise pattern is fine in workers
+    "TRY400",   # verbose error context in workers
+    "PLR0915",  # worker task is inherently long
+    "ARG001",   # Celery signal handler args are required by the protocol
+    "ARG002",   # same
+    "N806",     # the runner uses module-level caps; clean enough
+]
+"backend/app/db/*.py" = ["PLW0603"]  # module-level engine singleton
+"backend/app/models/*.py" = ["E501", "ARG002"]  # SQLAlchemy signatures
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend/app"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+# Celery, boto3, botocore have no upstream type stubs.
+[[tool.mypy.overrides]]
+module = [
+    "celery",
+    "celery.*",
+    "boto3",
+    "botocore.*",
+    "moto",
+    "moto.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "backend.tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["backend/tests"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning:celery.*",
+]

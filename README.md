@@ -1,1 +1,58 @@
-"# video-transcoder" 
+# VideoTranscode Pro
+
+> Portfolio-grade asynchronous video transcoding platform built to the spec in `docs/`.
+
+## Status
+
+| Sprint | Scope                                      | State         |
+| ------ | ------------------------------------------ | ------------- |
+| 1      | Core loop: API + worker + FFmpeg + tests   | **In review** |
+| 2      | Storage hardening, presigned URLs, cleanup | Not started   |
+| 3      | Frontend (React + TS), polish, E2E         | Not started   |
+
+## Repository layout
+
+```
+.
+├── backend/                  FastAPI + Celery worker (Sprint 1)
+├── frontend/                 React app (Sprint 3 placeholder)
+├── docker-compose.dev.yml    Local dev stack (Postgres + Redis + MinIO + API + worker)
+├── docker-compose.yml        Production stack (CI/CD, GHCR images, Caddy)
+├── Caddyfile                 Reverse proxy + auto-TLS
+├── pyproject.toml            Ruff/Black/Mypy/Pytest config (repo-wide)
+├── .pre-commit-config.yaml   Local hooks
+└── docs/                     Source-of-truth specs (PRD, stories, tests, DoD)
+```
+
+## Quick start
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Then open:
+- API docs: <http://localhost:8000/docs>
+- MinIO:   <http://localhost:9001> (`minioadmin`/`minioadmin`)
+
+## Running the tests
+
+```bash
+cd backend
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements-dev.txt
+PYTHONPATH=. pytest --cov=app
+```
+
+## Documentation
+
+See [`docs/`](./docs) for:
+- `prd.md` — Product Requirements
+- `user_stories.md` — Acceptance criteria per feature
+- `implementation.md` — Sprint plan
+- `testing_strategies.md` — Test taxonomy
+- `ui_ux_spec.md` — UI design language
+- `coding_standards.md` — Formatter / linter rules
+- `definition_of_done.md` — Definition of Done
+- `deployment.md` — Hetzner / Caddy / GHCR plan
+
+See [`backend/README.md`](./backend/README.md) for the API contract, error codes, and environment reference.
