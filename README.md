@@ -22,14 +22,16 @@
 
 ```
 .
-├── backend/                  FastAPI + Celery worker (Sprint 1)
+├── backend/                  FastAPI + Celery worker (Sprints 1-2)
 ├── frontend/                 React app (Sprint 3 placeholder)
-├── docker-compose.dev.yml    Local dev stack (Postgres + Redis + MinIO + API + worker)
-├── docker-compose.yml        Production stack (CI/CD, GHCR images, Caddy)
-├── Caddyfile                 Reverse proxy + auto-TLS
+├── docker-compose.dev.yml    Local dev stack (Postgres + Redis + MinIO + API + worker + beat)
+├── docker-compose.yml        Production stack (GHCR images, joined to NPM network)
+├── .env.example              Production env template
 ├── pyproject.toml            Ruff/Black/Mypy/Pytest config (repo-wide)
 ├── .pre-commit-config.yaml   Local hooks
-└── docs/                     Source-of-truth specs (PRD, stories, tests, DoD)
+└── docs/
+    ├── nginx-proxy-manager.md  How to attach NPM to the `videotranscoder` network
+    └── ...                     Source-of-truth specs (PRD, stories, tests, DoD)
 ```
 
 ## Quick start
@@ -61,6 +63,7 @@ See [`docs/`](./docs) for:
 - `ui_ux_spec.md` — UI design language
 - `coding_standards.md` — Formatter / linter rules
 - `definition_of_done.md` — Definition of Done
-- `deployment.md` — Hetzner / Caddy / GHCR plan
+- `deployment.md` — Hetzner / NPM / GHCR plan
+- `nginx-proxy-manager.md` — Step-by-step NPM proxy-host setup
 
 See [`backend/README.md`](./backend/README.md) for the API contract, error codes, and environment reference.
