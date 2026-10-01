@@ -6,9 +6,17 @@
 
 | Sprint | Scope                                      | State         |
 | ------ | ------------------------------------------ | ------------- |
-| 1      | Core loop: API + worker + FFmpeg + tests   | **In review** |
-| 2      | Storage hardening, presigned URLs, cleanup | Not started   |
+| 1      | Core loop: API + worker + FFmpeg + tests   | ✅ Done       |
+| 2      | Storage hardening, presigned URLs, cleanup | ✅ Done       |
 | 3      | Frontend (React + TS), polish, E2E         | Not started   |
+
+## Sprint 2 highlights
+
+* **Magic-byte preflight** — the worker does a ranged GET against Bucket A before downloading the full file; bad-magic uploads never enter FFmpeg.
+* **Retry classification** — `StorageError` is transient (Celery auto-retry with backoff, max 3); FFmpeg failures are permanent.
+* **Structured stderr logs** — full FFmpeg stderr is written to `/tmp/transcoder/ffmpeg-logs/{job_id}.log`; the `Job.ffmpeg_stderr` column stores a preview.
+* **Celery Beat cleanup cron** — `cleanup_runner.run_once()` runs every 15 minutes, deleting `UPLOADING` jobs older than 1 hour and reporting `zombies_found` / `objects_deleted` / `objects_failed`.
+* **Testcontainers scaffolding** — `tests/integration/test_testcontainers_pipeline.py` ships the full API → DB → Celery broker path test, gated on Docker availability so it auto-skips when Docker is missing.
 
 ## Repository layout
 

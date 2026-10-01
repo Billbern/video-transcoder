@@ -62,6 +62,12 @@ services:
     <<: *backend-base
     command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
 
+  beat:
+    <<: *backend-base
+    command: celery -A app.workers.celery_app beat --loglevel=INFO
+    depends_on:
+      - worker
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

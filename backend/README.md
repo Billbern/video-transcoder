@@ -31,6 +31,42 @@ backend/
 └── requirements-dev.txt
 ```
 
+## Worker resilience
+
+The Celery worker (`transcode_job`) implements the resilience contract from
+`docs/prd.md`:
+
+* **Magic-byte validation** — a ranged `GET` against Bucket A reads the first
+  32 bytes *before* downloading the source. Files that don't match a known
+  container (MP4/MOV/Matroska) are marked `FAILED` with code `1001`
+  (`UNSUPPORTED_FORMAT`) and never enter the FFmpeg pipeline.
+* **Transient vs. permanent errors** — `StorageError` is wrapped in a
+  `TransientError` and retried via `self.retry(countdown=...)` up to
+  `max_retries=3`. Only after the retries are exhausted is the job marked
+  `FAILED` with code `1005` (`STORAGE_UNAVAILABLE`). FFmpeg failures are
+  permanent and never trigger retries (per the PRD: we don't want to burn CPU
+  on a corrupted source).
+* **Structured stderr capture** — the full FFmpeg stderr is written to
+  `/tmp/transcoder/ffmpeg-logs/{job_id}.log`; the `Job.ffmpeg_stderr` column
+  stores a preview (header line + first 2000 bytes) so operators can grep the
+  full log on disk.
+* **Idempotent cleanup cron** — `cleanup_runner.run_once()` is registered as
+  a Celery Beat task (`cleanup-zombie-uploads`, every 15 minutes) that
+  deletes `UPLOADING` jobs older than 1 hour. Reports `zombies_found`,
+  `objects_deleted`, and `objects_failed` as metrics-friendly counters.
+
+## Error codes
+
+Mirrored on the frontend (`docs/ui_ux_spec.md` §3.3).
+
+| Code | Meaning                          | Marked `FAILED`? | Retryable? |
+| ---- | -------------------------------- | ---------------- | ---------- |
+| 1001 | Unsupported format (bad magic)   | Yes              | No         |
+| 1003 | FFmpeg failed                    | Yes              | No         |
+| 1004 | Storage quota exceeded (sim.)    | Yes              | No         |
+| 1005 | Storage backend unavailable      | After retries    | Yes        |
+| 1999 | Unclassified internal error      | Yes              | No         |
+
 ## Quick start (with Docker)
 
 ```bash
@@ -88,17 +124,6 @@ mypy --config-file ../pyproject.toml app   # strict mode (with third-party overr
 | GET    | `/api/jobs/{id}`    | Get one job; include presigned GET URL if COMPLETED |
 | GET    | `/health`           | Health probe                                      |
 | GET    | `/docs`             | Swagger UI (FastAPI auto-docs)                    |
-
-### Error codes (mirrored on the frontend)
-
-| Code | Meaning                                |
-| ---- | -------------------------------------- |
-| 1001 | Unsupported format (bad MIME/ext)      |
-| 1002 | Corrupted source file                  |
-| 1003 | FFmpeg failed                          |
-| 1004 | Storage quota exceeded (simulated)     |
-| 1005 | Storage backend unavailable            |
-| 1999 | Unclassified internal error            |
 
 ## Environment variables
 

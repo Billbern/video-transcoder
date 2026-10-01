@@ -99,11 +99,13 @@ services:
     <<: *backend-base
     command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=1
 
-  cleanup:
+  beat:
     <<: *backend-base
-    command: python -m app.workers.cleanup_runner
+    command: celery -A app.workers.celery_app beat --loglevel=INFO
     depends_on:
       backend:
+        condition: service_started
+      worker:
         condition: service_started
 
 volumes:
