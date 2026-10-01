@@ -20,7 +20,7 @@ from app.schemas import (
 )
 from app.services.formats import looks_like_video
 from app.services.job_repository import JobRepository
-from app.services.storage import S3Service
+from app.services.storage import S3Service, StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -115,19 +115,23 @@ async def initiate_upload(
     job.ingest_object_key = ingest_key
     await db.flush()
 
-    # Best-effort bucket ensure; ignore if MinIO is offline (tests w/o S3).
+    # Best-effort bucket ensure; storage errors are raised so the API returns 503
+    # instead of a placeholder URL. This is the Sprint 2 contract: never return
+    # a URL the client can't actually use.
+    storage = S3Service(settings)
     try:
-        storage = S3Service(settings)
         storage.ensure_buckets()
         upload_url, expires_in = storage.generate_presigned_put(
             bucket=settings.s3_bucket_ingest,
             key=ingest_key,
             content_type=payload.content_type,
         )
-    except Exception:  # noqa: BLE001 - intentional fallback for unit tests
-        logger.exception("Storage unavailable; returning placeholder URL")
-        upload_url = f"https://placeholder.invalid/{ingest_key}"
-        expires_in = settings.s3_presign_expiry_seconds
+    except StorageError as e:
+        logger.exception("Storage backend unavailable on /initiate")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Storage backend unavailable: {e}",
+        ) from e
 
     return InitiateResponse(
         job_id=job_id,
@@ -173,9 +177,14 @@ async def start_transcode(
             )
     except HTTPException:
         raise
-    except Exception:  # noqa: BLE001
-        # Storage down: still queue the job (worker will retry). Log loudly.
+    except StorageError as e:
+        # Storage is down: tell the client to retry rather than silently
+        # accepting a job the worker can't process.
         logger.exception("Storage preflight failed for job %s", job.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Storage backend unavailable: {e}",
+        ) from e
 
     await repo.set_status(job.id, JobStatus.QUEUED)
 
@@ -212,7 +221,9 @@ async def list_jobs(
                 download_url, _ = storage.generate_presigned_get(
                     bucket=settings.s3_bucket_output, key=job.output_object_key
                 )
-            except Exception:  # noqa: BLE001
+            except StorageError:
+                # Per-job presign failure must not break the whole list. The
+                # job still appears, just without a download URL.
                 logger.exception("Failed to presign URL for job %s", job.id)
         responses.append(_to_job_response(job, download_url=download_url))
 
@@ -242,7 +253,8 @@ async def get_job(
             download_url, _ = storage.generate_presigned_get(
                 bucket=get_settings().s3_bucket_output, key=job.output_object_key
             )
-        except Exception:  # noqa: BLE001
+        except StorageError:
+            # `download_url` stays None; the client can retry the GET.
             logger.exception("Failed to presign URL for job %s", job.id)
 
     return _to_job_response(job, download_url=download_url)

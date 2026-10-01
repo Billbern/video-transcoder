@@ -78,22 +78,58 @@ async def test_initiate_rejects_size_above_runtime_limit(client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_initiate_succeeds_with_placeholder_storage(client) -> None:
-    # S3 is not running in tests; the API should fall back to a placeholder URL.
-    r = await client.post(
-        "/api/initiate",
-        json={
-            "filename": "clip.mp4",
-            "content_type": "video/mp4",
-            "file_size": 1024 * 1024,
-            "preset": "720p",
-        },
-    )
+async def test_initiate_succeeds_with_mocked_storage(client) -> None:
+    """`/initiate` should return a presigned PUT URL when the S3 backend is reachable.
+
+    The Sprint 1 placeholder fallback is gone — the contract now requires a
+    real URL. We mock the storage layer so the test stays hermetic.
+    """
+    with (
+        patch("app.services.storage.S3Service.ensure_buckets"),
+        patch(
+            "app.services.storage.S3Service.generate_presigned_put",
+            return_value=("http://signed.example/k", 3600),
+        ),
+    ):
+        r = await client.post(
+            "/api/initiate",
+            json={
+                "filename": "clip.mp4",
+                "content_type": "video/mp4",
+                "file_size": 1024 * 1024,
+                "preset": "720p",
+            },
+        )
     assert r.status_code == 201, r.text
     body = r.json()
     assert "job_id" in body
-    assert "upload_url" in body
+    assert body["upload_url"] == "http://signed.example/k"
     assert body["expires_in"] > 0
+
+
+@pytest.mark.asyncio
+async def test_initiate_returns_503_when_storage_down(client) -> None:
+    """If the storage backend is unreachable, the API must return 503 — never a placeholder URL."""
+    from app.services.storage import StorageError
+
+    with (
+        patch("app.services.storage.S3Service.ensure_buckets"),
+        patch(
+            "app.services.storage.S3Service.generate_presigned_put",
+            side_effect=StorageError("minio offline"),
+        ),
+    ):
+        r = await client.post(
+            "/api/initiate",
+            json={
+                "filename": "clip.mp4",
+                "content_type": "video/mp4",
+                "file_size": 1024,
+                "preset": "720p",
+            },
+        )
+    assert r.status_code == 503
+    assert "Storage backend unavailable" in r.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -124,15 +160,22 @@ async def test_full_flow_with_mocked_storage(client, monkeypatch) -> None:
     monkeypatch.setattr("app.api.jobs._dispatch_transcode", fake_dispatch)
 
     # 1. Initiate.
-    init = await client.post(
-        "/api/initiate",
-        json={
-            "filename": "demo.mp4",
-            "content_type": "video/mp4",
-            "file_size": 4096,
-            "preset": "720p",
-        },
-    )
+    with (
+        patch("app.services.storage.S3Service.ensure_buckets"),
+        patch(
+            "app.services.storage.S3Service.generate_presigned_put",
+            return_value=("http://signed.example/k", 3600),
+        ),
+    ):
+        init = await client.post(
+            "/api/initiate",
+            json={
+                "filename": "demo.mp4",
+                "content_type": "video/mp4",
+                "file_size": 4096,
+                "preset": "720p",
+            },
+        )
     assert init.status_code == 201, init.text
     job_id = init.json()["job_id"]
 
@@ -157,7 +200,7 @@ async def test_full_flow_with_mocked_storage(client, monkeypatch) -> None:
     # The dispatch was invoked with the right job id.
     assert sent == [job_id]
 
-    # 3. Fetch it back.
+    # 3. Fetch it back. Status is still QUEUED/UPLOADING so download URL is None.
     with patch("app.services.storage.S3Service.ensure_buckets"):
         r = await client.get(f"/api/jobs/{job_id}")
     assert r.status_code == 200, r.text

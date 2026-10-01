@@ -56,10 +56,14 @@ ignore = [
     "TRY300",   # try/except return pattern is fine in workers
     "TRY301",   # abstract raise pattern is fine in workers
     "TRY400",   # verbose error context in workers
+    "TRY401",   # logger.exception already includes the exception
     "PLR0915",  # worker task is inherently long
+    "PLR0911",  # worker task has many success/failure exit points
+    "PLR0912",  # worker task has many branches (each error class)
     "ARG001",   # Celery signal handler args are required by the protocol
     "ARG002",   # same
     "N806",     # the runner uses module-level caps; clean enough
+    "UP038",    # isinstance tuple form is fine in workers (readability)
 ]
 "backend/app/db/*.py" = ["PLW0603"]  # module-level engine singleton
 "backend/app/models/*.py" = ["E501", "ARG002"]  # SQLAlchemy signatures

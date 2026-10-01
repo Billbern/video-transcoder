@@ -9,3 +9,4 @@ black==24.10.0
 ruff==0.7.4
 mypy==1.13.0
 types-redis==4.6.0.20241004
+testcontainers[postgres,redis]==4.8.2
